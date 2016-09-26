@@ -1,0 +1,209 @@
+def aspectjversion = "1.8.9"
+ 
+
+/**
+ * This gradle 1.9 file is building one java and  source fiiles with groovy gradle 
+ * plugin and with (ant) ajc compiler compiling aspectj classes and weaving those aspects
+ * into compiled classes. In class weaving there are used normal mode weaving for java
+ * aspects and incremental weaving for groovy aspects.
+ * At last as default tasks two java/groovy apps are started.
+ */
+
+// apply plugin: 'java'
+apply plugin: 'groovy'
+
+def alllibjars =  fileTree(dir: 'libs', includes: ['*.jar'])
+
+buildscript {
+    repositories {
+        maven {
+            url "https://maven.eveoh.nl/content/repositories/releases"
+        }
+    }
+
+    dependencies {
+        // classpath "nl.eveoh:gradle-aspectj:1.4
+		classpath "nl.eveoh:gradle-aspectj:1.6"
+		//classpath "gradle-aspectj:1.5"
+    }
+}
+
+repositories {
+	// alllibjars
+	// flatDir name: 'localRepository', dirs: 'lib'
+	// flatDir name: 'localRepository', dirs: ['lib', '/java/versiot/git/gradle-aspectj/build/libs']
+	// url "https://maven.eveoh.nl/content/repositories/releases"
+	//classpath fileTree(dir: '/java/versiot/git/gradle-aspectj/build/libs',
+      //                 includes: ['gradle-aspectj-1.5.jar'])
+	mavenCentral()
+}
+
+project.ext {
+    //aspectjVersion = '1.8.0'
+	aspectjVersion = aspectjversion
+}
+
+configurations {
+	ajc
+	aspects
+	aspectCompile
+	compile {
+		extendsFrom aspects
+	}
+  }
+  
+/* earlier copy/paste from java version, which is workign for java files:
+ * 
+  compileJava {
+	sourceCompatibility="1.8"
+	targetCompatibility="1.8"
+  
+	doLast{
+		ant.taskdef( resource:"org/aspectj/tools/ant/taskdefs/aspectjTaskdefs.properties", classpath: configurations.ajc.asPath)
+		ant.iajc(source:"1.8", target:"1.8", destDir:sourceSets.main.output.classesDir.absolutePath, maxmem:"512m", fork:"true",
+			aspectPath:configurations.aspects.asPath,  sourceRootCopyFilter:"** /.svn/*,** /*.java",classpath:"${configurations.compile.asPath};${configurations.aspectCompile.asPath};${configurations.aspects.asPath}:${configurations.ajc.asPath}"){
+			sourceroots{
+				sourceSets.main.java.srcDirs.each{
+					pathelement(location:it.absolutePath)
+				}
+			}
+		}
+	}
+  }
+*/
+  
+   def tagfilename = "iajc.woven.tag"
+   
+   compileGroovy {
+	  sourceCompatibility="1.8"
+	  targetCompatibility="1.8"
+	
+	  doLast{
+		  ant.taskdef( resource:"org/aspectj/tools/ant/taskdefs/aspectjTaskdefs.properties", classpath: configurations.ajc.asPath)
+		  		  
+		  /**
+		   * This iajc ant call may need an buildDir value for find all ready compiled classes!
+		   * It compiles all .java and .groovy and .aj classes and weaving java aspect .classes but not groovy aspect .classes:
+		   */
+		  ant.iajc(source:sourceCompatibility, target:targetCompatibility, destDir:sourceSets.main.output.classesDir.absolutePath, maxmem:"512m", fork:"true",
+			  aspectPath:configurations.aspects.asPath,  sourceRootCopyFilter:"**/.svn/*,**/*.java,**/*.class",classpath:"${sourceSets.main.output.classesDir.absolutePath};${configurations.compile.asPath};${configurations.aspectCompile.asPath}"){
+			  sourceroots{
+				  sourceSets.main.java.srcDirs.each{
+					  // println "java.source " +it.absolutePath
+					  pathelement(location:it.absolutePath)
+				  }			
+			  }
+		  }
+		 
+		 
+		 /**
+		  * For real situaation this tag file should be deleted/updated only when needed
+		  * for incremental compiling. That is some source files are just compiled/updated
+		  * to start this next ant.iajc call:
+		  */
+		 ant.delete(file: tagfilename)
+		 /*			  
+		 File file = new File("iajc.woven.tag");
+		 try {
+			 if (file.exists())
+			 	file.delete()
+			 file.createNewFile();
+		 } catch (IOException e) {
+		 	e.printStackTrace();
+		 }
+		 */
+		 ant.touch(file: tagfilename)
+		 
+		 /**
+		  * This iajc ant call needs an buildDir value for find all ready compiled classes!
+		  * Normal mode iajc call is not working for groovy aspect classes (class weaving)!
+		  * It weaves groovy aspect .classes by incremental compiling:
+		  */
+		 ant.iajc(source:sourceCompatibility, target:targetCompatibility, 
+			  destDir:sourceSets.main.output.classesDir.absolutePath, 
+			  maxmem:"512m", fork:"true",
+			  tagfile: tagfilename,
+			  aspectPath:configurations.aspects.asPath, 
+			  sourceRootCopyFilter:"**/.svn/*,**/*.groovy,**/*.class",
+			  inpathDirCopyFilter:"**/.svn/*,**/*.groovy,**/*.class",
+			  classpath:"${sourceSets.main.output.classesDir.absolutePath};${configurations.compile.asPath};${configurations.aspectCompile.asPath}", 
+			  incremental: "true"){
+				  sourceroots{
+					  sourceSets.main.groovy.srcDirs.each{
+						  println "groovy.source " +it.absolutePath
+						  pathelement(location:it.absolutePath)
+					  }
+				  }
+				  inpath {					  
+					  pathelement(location:buildDir.absolutePath)
+				  }
+			  }
+	  	  }			  
+	}
+  
+  // def aspectjversion = "1.6.10"
+  // def aspectjversion = "1.7.4"
+  // def aspectjversion = "1.8.0"
+  //def springversion = "3.2.2.RELEASE"
+  def springversion = "3.2.6.RELEASE"
+  //def springversion = "4.0.6.RELEASE"
+ // def groovy_compiler_version = '2.4.6'
+  def groovy_compiler_version = '2.4.7'
+  def groovy_all = 'org.codehaus.groovy:groovy-all:' +groovy_compiler_version
+  def aspectj_tool = 'org.aspectj:aspectjtools:'+aspectjversion
+  //def aspectj_rt = 'org.codehaus.groovy:groovy-all:2.1.9'
+  def aspectj_rt = 'org.aspectj:aspectjrt:'+aspectjversion
+  def aspectj_aspects = 'org.springframework:spring-aspects:' + springversion
+  
+  dependencies {
+	  ajc            aspectj_tool 
+	  ajc			 groovy_all
+	  compile        aspectj_rt
+	  compile 		 groovy_all
+	  aspects        aspectj_aspects
+	  aspectCompile  "javax.persistence:persistence-api:1.0"
+	  aspectCompile  "org.springframework:spring-tx:$springversion"
+	  // aspectCompile  aspectj_rt
+	  aspectCompile	 groovy_all
+	  runtime		 aspectj_rt
+	  runtime		 groovy_all
+  }
+
+  apply plugin: 'aspectj'
+  
+  /**
+   * not needed here:
+   */
+  task defaultProperties << {
+	  println "Project: $project"
+	  println "Name: $name"
+	  println "Path: $path"
+	  println "Project directory: $projectDir"
+	  println "Build directory: $buildDir"
+	  println "Version: $version"
+	  println "Group: $project.group"
+	  println "Description: $project.description"
+	  println "AntBuilder: $ant"
+	  println "sourceSets.main.runtimeClasspath" +sourceSets.main.runtimeClasspath.each { println it }
+  }
+  
+  task(runJava, dependsOn: 'classes', type: JavaExec) {
+	  
+	  main = 'fi.test.Test'
+	  classpath = sourceSets.main.runtimeClasspath
+	  args 'mrhaki'
+	  systemProperty 'simple.message', 'Hello '
+  }
+
+  task(runGroovymy, dependsOn: 'classes', type: JavaExec) {
+
+     buildscript.configurations.classpath.each { println it }
+		
+	  main = 'testgroovyaspect.TestGroovyAspectj'
+	  classpath = sourceSets.main.runtimeClasspath
+	  args 'mrhaki'
+	  systemProperty 'simple.message', 'Hello'
+  }
+
+  defaultTasks 'runJava', 'runGroovy'
+    
